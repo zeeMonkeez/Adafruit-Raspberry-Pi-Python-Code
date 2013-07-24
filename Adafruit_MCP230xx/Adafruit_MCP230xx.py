@@ -90,10 +90,10 @@ class Adafruit_MCP230XX(Adafruit_I2C):
             self.outputvalue = self.i2c.readU16(self.MCP23017_OLATA)
 
     def writeIOCon(self):
-        if num_gpios <= 8:
+        if self.num_gpios <= 8:
             self.i2c.write8(self.MCP23008_IOCON, ((self.int_polarity & 1)<<1) | ((self.int_open_drain & 1)<<2) | ((self.disable_slew&2)<<4) | ((self.sequential_op&2)<<5)  )
 
-    def interrupt(self, pin, state, mode=self.INT_ON_CHANGE, defval=self.LOW):
+    def interrupt(self, pin, state, mode=INT_ON_CHANGE, defval=LOW):
         assert 0 <= pin < self.num_gpios, "Pin number %s is invalid, must be between 0 and %s" % (pin, self.num_gpios-1)
 
         if state is self.INT_ENABLED: self.int_enable |=  (1 << pin)
