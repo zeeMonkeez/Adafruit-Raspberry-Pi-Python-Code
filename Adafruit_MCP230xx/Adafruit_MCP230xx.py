@@ -28,6 +28,15 @@ class Adafruit_MCP230XX(Adafruit_I2C):
     INPUT  = True
     OUTPUT = False
 
+    INT_DISABLED    = 0
+    INT_ENABLED     = 1
+
+    INT_ON_NOTDEF   = 1
+    INT_ON_CHANGE   = 0
+
+    HIGH            = 1
+    LOW             = 0
+
     MCP23017_IODIRA = 0x00
     MCP23017_IODIRB = 0x01
     MCP23017_GPPUA  = 0x0C
@@ -40,7 +49,10 @@ class Adafruit_MCP230XX(Adafruit_I2C):
     MCP23008_GPIO   = 0x09
     MCP23008_GPPU   = 0x06
     MCP23008_OLAT   = 0x0A
-
+    MCP23008_GPINTEN= 0x02
+    MCP23008_DEFVAL = 0x03
+    MCP23008_INTCON = 0x04
+    MCP23008_IOCON  = 0x05
 
     def __init__(self, address, num_gpios=8, busnum=-1, debug=False):
 
@@ -49,6 +61,19 @@ class Adafruit_MCP230XX(Adafruit_I2C):
         self.i2c       = Adafruit_I2C(address, busnum, debug)
         self.num_gpios = num_gpios
         self.pullups   = 0
+        # stores interrupt enabled info for pins
+        self.int_enable= 0
+        # default value for pins to compare for interrupt-on-not-default-value
+        self.def_value = 0
+        # but by default, set interrupt-on-change (set bit high for int-on-non-default)
+        self.int_control = 0
+        # various bits for the control register
+        self.sequential_op = 0
+        self.disable_slew = 0
+        self.int_open_drain = 0
+        # 0 - active-low, 1 - active-high
+        self.int_polarity = 0
+
 
         # Set default pin values -- all inputs with pull-ups disabled.
         # Current OLAT (output) value is polled, not set.
@@ -56,6 +81,7 @@ class Adafruit_MCP230XX(Adafruit_I2C):
             self.direction = 0xFF
             self.i2c.write8(self.MCP23008_IODIR, self.direction)
             self.i2c.write8(self.MCP23008_GPPU , self.pullups)
+            self.writeIOCon()
             self.outputvalue = self.i2c.readU8(self.MCP23008_OLAT)
         else:
             self.direction = 0xFFFF
@@ -63,8 +89,33 @@ class Adafruit_MCP230XX(Adafruit_I2C):
             self.i2c.write16(self.MCP23017_GPPUA , self.pullups)
             self.outputvalue = self.i2c.readU16(self.MCP23017_OLATA)
 
+    def writeIOCon(self):
+        if num_gpios <= 8:
+            self.i2c.write8(self.MCP23008_IOCON, ((self.int_polarity & 1)<<1) | ((self.int_open_drain & 1)<<2) | ((self.disable_slew&2)<<4) | ((self.sequential_op&2)<<5)  )
+
+    def interrupt(self, pin, state, mode=self.INT_ON_CHANGE, defval=self.LOW):
+        assert 0 <= pin < self.num_gpios, "Pin number %s is invalid, must be between 0 and %s" % (pin, self.num_gpios-1)
+
+        if state is self.INT_ENABLED: self.int_enable |=  (1 << pin)
+        else:                  self.int_enable &= ~(1 << pin)
+        if mode is self.INT_ON_NOTDEF: self.int_control |=  (1 << pin)
+        else:                  self.int_control &= ~(1 << pin)
+        if defval is self.HIGH: self.def_value |=  (1 << pin)
+        else:                  self.def_value &= ~(1 << pin)
+
+        if self.num_gpios <= 8:
+            self.i2c.write8(self.MCP23008_GPINTEN, self.int_enable)
+            self.i2c.write8(self.MCP23008_DEFVAL, self.def_value)
+            self.i2c.write8(self.MCP23008_INTCON, self.int_control)
+        return self.int_enable
+
+    def configInterrupt(self, polarity, open_drain):
+        self.int_polarity = polarity & 1
+        self.int_open_drain = open_drain & 1
+        self.writeIOCon()
 
     # Set single pin to either INPUT or OUTPUT mode
+
     def config(self, pin, mode):
 
         assert 0 <= pin < self.num_gpios, "Pin number %s is invalid, must be between 0 and %s" % (pin, self.num_gpios-1)
@@ -205,18 +256,18 @@ if __name__ == '__main__':
     # If you have a new Pi you may also need to add: bus=1
     # ****************************************************
     mcp = Adafruit_MCP230XX(address=0x20, num_gpios=16)
-    
+
     # Set pins 0, 1, 2 as outputs
     mcp.config(0, mcp.OUTPUT)
     mcp.config(1, mcp.OUTPUT)
     mcp.config(2, mcp.OUTPUT)
-    
+
     # Set pin 3 to input with the pullup resistor enabled
     mcp.pullup(3, True)
 
     # Read pin 3 and display the results
     print "%d: %x" % (3, mcp.input(3))
-    
+
     # Python speed test on output 0 toggling at max speed
     while True:
       mcp.output(0, 1) # Pin 0 High
