@@ -46,6 +46,7 @@ class Adafruit_MCP230XX(Adafruit_I2C):
     MCP23017_OLATA  = 0x14
     MCP23017_OLATB  = 0x15
     MCP23008_IODIR  = 0x00
+    MCP23008_IPOL   = 0x01
     MCP23008_GPIO   = 0x09
     MCP23008_GPPU   = 0x06
     MCP23008_OLAT   = 0x0A
@@ -64,6 +65,7 @@ class Adafruit_MCP230XX(Adafruit_I2C):
         self.i2c       = Adafruit_I2C(address, busnum, debug)
         self.num_gpios = num_gpios
         self.pullups   = 0
+        self.invert    = 0
         # stores interrupt enabled info for pins
         self.int_enable= 0
         # default value for pins to compare for interrupt-on-not-default-value
@@ -83,6 +85,7 @@ class Adafruit_MCP230XX(Adafruit_I2C):
         if num_gpios <= 8:
             self.direction = 0xFF
             self.i2c.write8(self.MCP23008_IODIR, self.direction)
+            self.i2c.write8(self.MCP23008_IPOL, self.invert)
             self.i2c.write8(self.MCP23008_GPPU , self.pullups)
             self.writeIOCon()
             self.outputvalue = self.i2c.readU8(self.MCP23008_OLAT)
@@ -129,15 +132,19 @@ class Adafruit_MCP230XX(Adafruit_I2C):
 
     # Set single pin to either INPUT or OUTPUT mode
 
-    def config(self, pin, mode):
+    def config(self, pin, mode, invert=False):
 
         assert 0 <= pin < self.num_gpios, "Pin number %s is invalid, must be between 0 and %s" % (pin, self.num_gpios-1)
 
         if mode is self.INPUT: self.direction |=  (1 << pin)
         else:                  self.direction &= ~(1 << pin)
 
+        if invert:  self.invert |=  (1<<pin)
+        else:       self.invert &= ~(1<<pin)
+
         if self.num_gpios <= 8:
             self.i2c.write8(self.MCP23008_IODIR, self.direction)
+            self.i2c.write8(self.MCP23008_IPOL, self.invert)
         elif pin < 8:
             # Replace low bits (IODIRA)
             self.i2c.write8(self.MCP23017_IODIRA, self.direction & 0xFF)
