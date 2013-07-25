@@ -53,6 +53,9 @@ class Adafruit_MCP230XX(Adafruit_I2C):
     MCP23008_DEFVAL = 0x03
     MCP23008_INTCON = 0x04
     MCP23008_IOCON  = 0x05
+    MCP23008_INTF   = 0x07
+    MCP23008_INTCAP = 0x08
+
 
     def __init__(self, address, num_gpios=8, busnum=-1, debug=False):
 
@@ -95,8 +98,10 @@ class Adafruit_MCP230XX(Adafruit_I2C):
 
     def interrupt(self, pin, state, mode=INT_ON_CHANGE, defval=LOW):
         assert 0 <= pin < self.num_gpios, "Pin number %s is invalid, must be between 0 and %s" % (pin, self.num_gpios-1)
-
-        if state is self.INT_ENABLED: self.int_enable |=  (1 << pin)
+        # interrupts can only be caused by 'input' pins. When we enable an interrupt, we should also make that pin an input. The converse is not true, however.
+        if state is self.INT_ENABLED:
+            self.int_enable |=  (1 << pin)
+            self.direction |=  (1 << pin)
         else:                  self.int_enable &= ~(1 << pin)
         if mode is self.INT_ON_NOTDEF: self.int_control |=  (1 << pin)
         else:                  self.int_control &= ~(1 << pin)
@@ -104,6 +109,7 @@ class Adafruit_MCP230XX(Adafruit_I2C):
         else:                  self.def_value &= ~(1 << pin)
 
         if self.num_gpios <= 8:
+            self.i2c.write8(self.MCP23008_IODIR, self.direction)
             self.i2c.write8(self.MCP23008_GPINTEN, self.int_enable)
             self.i2c.write8(self.MCP23008_DEFVAL, self.def_value)
             self.i2c.write8(self.MCP23008_INTCON, self.int_control)
@@ -113,6 +119,13 @@ class Adafruit_MCP230XX(Adafruit_I2C):
         self.int_polarity = polarity & 1
         self.int_open_drain = open_drain & 1
         self.writeIOCon()
+
+    def stateAtInterrupt(self):
+        if self.num_gpios <= 8:
+            intf = self.i2c.readU8(self.MCP23008_INTF)
+            intcap = self.i2c.readU8(self.MCP23008_INTCAP)
+            return {'intf' : intf, 'intcap' : intcap}
+        return {}
 
     # Set single pin to either INPUT or OUTPUT mode
 
