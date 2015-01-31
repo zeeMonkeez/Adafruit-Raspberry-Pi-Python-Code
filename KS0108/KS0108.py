@@ -185,5 +185,7 @@ if __name__ == '__main__':
 	lcd.point (7, 6, 255)
 	lcd.point (4, 15, 255)
   lcd.lineTo(78,54, 255)
+	lcd.updateWithCheck(1)
+
 
 
